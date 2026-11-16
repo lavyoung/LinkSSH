@@ -1,0 +1,91 @@
+# LinkSSH Desktop
+
+`linkssh-desktop` 是 LinkSSH 的跨平台桌面客户端，使用 Tauri 2、React 19、
+TypeScript、Vite、Tailwind CSS 4 和 Zustand 构建。
+
+桌面端与 Java 后端位于同一个 Git 仓库，但使用独立的 npm、Cargo 和 Tauri
+构建体系，不加入根 Maven Reactor。
+
+## 环境要求
+
+- Node.js 20 或更高版本
+- npm
+- Rust stable MSVC 工具链
+- Windows C++ Build Tools
+- Microsoft Edge WebView2
+
+## 当前工程结构
+
+```text
+linkssh-desktop/
+├── src/                    # React 与 TypeScript 源码
+│   ├── app/                # 应用外壳与顶层装配
+│   ├── features/           # 按业务能力纵向组织的桌面端功能
+│   │   ├── agent/          # AI 助手静态面板
+│   │   ├── execution/      # 终端静态面板
+│   │   └── host/           # 主机侧栏、展示类型、演示数据与选择状态
+│   ├── styles/             # Tailwind 入口与主题设计令牌
+│   ├── App.tsx             # React 根组件
+│   └── main.tsx            # React 入口与全局样式导入
+├── src-tauri/              # Tauri 原生端工程
+│   ├── capabilities/       # Tauri 权限能力声明
+│   ├── icons/              # 桌面应用图标
+│   ├── src/lib.rs          # Tauri 应用配置与命令注册
+│   ├── src/main.rs         # Windows 桌面进程入口
+│   ├── Cargo.toml          # Rust 依赖配置
+│   └── tauri.conf.json     # Tauri 应用配置
+├── index.html              # Vite HTML 入口
+├── package.json            # npm 脚本与前端依赖
+├── tsconfig.json           # TypeScript 配置
+└── vite.config.ts          # Vite 与 Tauri 开发配置
+```
+
+前端按业务能力纵向组织，避免形成全局 `components`、`stores`、`types` 大杂烩。
+只有真正跨多个业务功能复用的组件或类型，才提升到共享目录。
+
+当前主机数据来自 `host.fixtures.ts`，仅用于教程第 1-1 节的静态界面演示；
+`host.store.ts` 只管理跨组件共享的选中主机 ID。两者都不是后端 Host 聚合或
+真实 SSH 连接状态。
+
+不为尚不存在的职责提前创建空目录或空文件。
+
+## 当前界面范围
+
+- 左侧：主机分组与主机列表静态原型
+- 中间：终端视觉占位，不包含终端运行时或命令执行
+- 右侧：AI 助手视觉占位，不调用模型
+- 主机选择：使用 Zustand 驱动终端标题和在线/离线演示状态
+
+当前不包含主机 CRUD、SSH 连接、凭据管理、Agent 调用或前后端联调。
+
+## 安装依赖
+
+```powershell
+npm install
+```
+
+## Web 构建
+
+```powershell
+npm run build
+```
+
+## Rust 检查
+
+```powershell
+Set-Location src-tauri
+cargo check
+```
+
+## 启动桌面应用
+
+```powershell
+npm run tauri dev
+```
+
+## 安全边界
+
+- Tauri Capability 必须遵循最小权限原则。
+- 前端不得直接获得不受控的 Shell、文件系统或凭据访问能力。
+- 远程执行、风险判断和凭据管理必须通过 LinkSSH 后端公开 API 完成。
+- 密码、私钥、Token 和凭据正文不得进入前端状态、日志或本地存储。
