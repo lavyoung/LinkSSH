@@ -6,11 +6,13 @@
 ## 1. 文档状态
 
 - 状态：Active
-- 规划版本：0.1
+- 规划版本：0.3
 - 最后更新：2026-11-16
-- 当前阶段：P0 项目骨架
+- 当前阶段：P1 主机管理（待启动）
 - 技术基线：Java 21、Maven 3.9+、Spring Boot 4.1.x
-- 基础包名：`com.lavyoung.linkssh`
+- Maven 坐标：`com.lavyoung.ai:linkssh`
+- 基础包名：`com.lavyoung.ai.linkssh`
+- 版本策略：`${revision}` + Flatten Maven Plugin
 
 ## 2. 项目愿景
 
@@ -136,16 +138,17 @@ bootstrap → 所有需要装配的模块
 
 ### P0：项目骨架
 
-状态：进行中
+状态：已完成
 
-- [ ] 建立 Maven 父工程
-- [ ] 创建后端业务模块
-- [ ] 创建 Spring Boot 启动模块
-- [ ] 接入 Spring Modulith
-- [ ] 建立 ArchUnit 架构测试
+- [x] 建立 Maven 父工程
+- [x] 配置 CI-Friendly Version 与 Flatten Maven Plugin
+- [x] 创建后端业务模块
+- [x] 创建 Spring Boot 启动模块
+- [x] 接入 Spring Modulith
+- [x] 建立 ArchUnit 架构测试
 - [x] 建立 ADR 目录
-- [ ] 建立统一代码和构建规范
-- [ ] 完成空项目构建验证
+- [x] 建立统一代码和构建规范
+- [x] 完成空项目构建验证
 
 验收命令：
 
@@ -212,9 +215,11 @@ mvn clean verify
 
 ## 11. 当前迭代
 
-目标：完成 P0 项目骨架，使空项目可以构建，并通过模块和架构验证。
+P0 项目骨架已经完成。父工程、业务模块、Spring Boot 启动模块、CI-Friendly
+Version、Spring Modulith、ArchUnit、统一构建规范和完整构建验证均已落地。
 
-本轮禁止实现具体 SSH、AI 或数据库业务。
+下一迭代为 P1 主机管理，当前尚未开始。在进入 P1 业务实现前，需要先明确主机聚合、
+凭据引用和 SSH 主机指纹的领域边界。本阶段仍未实现具体 SSH、AI 或数据库业务。
 
 ## 12. 完成定义
 
@@ -247,4 +252,6 @@ mvn clean verify
 
 | 日期 | 版本 | 变更 |
 |---|---|---|
+| 2026-11-16 | 0.3 | 完成 P0 工程骨架、模块验证、ArchUnit 架构守卫及统一代码和构建规范 |
+| 2026-11-16 | 0.2 | 统一 AI 项目命名空间，并确立 `${revision}` 与 Flatten Maven Plugin 版本策略 |
 | 2026-11-16 | 0.1 | 建立项目规划、范围、模块边界和迭代路线 |

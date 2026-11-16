@@ -61,7 +61,7 @@ linkssh-desktop
 业务模块的根包用于放置明确公开的 API、事件和必要契约；实现放在 `internal` 下：
 
 ```text
-com.lavyoung.linkssh.<context>
+com.lavyoung.ai.linkssh.<context>
 ├─ public API and events
 └─ internal
    ├─ application
@@ -110,12 +110,18 @@ Spring AI、Google ADK、Apache MINA SSHD、MyBatis、Tauri 和具体模型 SDK
 
 - Java 21
 - Maven 3.9+
+- Maven Group ID：`com.lavyoung.ai`
+- Java 基础包：`com.lavyoung.ai.linkssh`
+- 使用 `${revision}` 作为唯一项目版本来源
+- 使用 Flatten Maven Plugin 生成可消费的 POM
 - Spring Boot 4.1.x
 - Spring AI 2.0.x
 - Spring Modulith 2.1.x
 - Tauri 2 + React + TypeScript
 
 依赖使用 BOM 或父 POM 统一管理，子模块不得随意覆盖公共依赖版本。
+根项目和子模块父坐标使用 `${revision}`，内部模块依赖使用
+`${project.version}`；安装或发布时由 Flatten Maven Plugin 解析 CI-Friendly 版本占位符。
 
 ## 后果
 
