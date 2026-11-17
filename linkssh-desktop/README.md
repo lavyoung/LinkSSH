@@ -1,7 +1,7 @@
 # LinkSSH Desktop
 
 `linkssh-desktop` 是 LinkSSH 的跨平台桌面客户端，使用 Tauri 2、React 19、
-TypeScript、Vite、Tailwind CSS 4 和 Zustand 构建。
+TypeScript、Vite、Tailwind CSS 4、Zustand 和 i18next 构建。
 
 桌面端与 Java 后端位于同一个 Git 仓库，但使用独立的 npm、Cargo 和 Tauri
 构建体系，不加入根 Maven Reactor。
@@ -19,11 +19,12 @@ TypeScript、Vite、Tailwind CSS 4 和 Zustand 构建。
 ```text
 linkssh-desktop/
 ├── src/                    # React 与 TypeScript 源码
-│   ├── app/                # 应用外壳与顶层装配
+│   ├── app/                # 应用外壳、活动栏、布局、主题与国际化
 │   ├── features/           # 按业务能力纵向组织的桌面端功能
-│   │   ├── agent/          # AI 助手静态面板
-│   │   ├── execution/      # 终端静态面板
-│   │   └── host/           # 主机侧栏、展示类型、演示数据与选择状态
+│   │   ├── agent/          # AI 助手静态会话与安全 Markdown 展示
+│   │   ├── execution/      # 终端、文件树与终端外观偏好
+│   │   ├── host/           # 主机侧栏、展示类型、演示数据与选择状态
+│   │   └── settings/       # 桌面端设置弹窗
 │   ├── styles/             # Tailwind 入口与主题设计令牌
 │   ├── App.tsx             # React 根组件
 │   └── main.tsx            # React 入口与全局样式导入
@@ -43,7 +44,7 @@ linkssh-desktop/
 前端按业务能力纵向组织，避免形成全局 `components`、`stores`、`types` 大杂烩。
 只有真正跨多个业务功能复用的组件或类型，才提升到共享目录。
 
-当前主机数据来自 `host.fixtures.ts`，仅用于教程第 1-1 节的静态界面演示；
+当前主机数据来自 `host.fixtures.ts`，仅用于教程的静态界面演示；
 `host.store.ts` 只管理跨组件共享的选中主机 ID。两者都不是后端 Host 聚合或
 真实 SSH 连接状态。
 
@@ -51,12 +52,16 @@ linkssh-desktop/
 
 ## 当前界面范围
 
-- 左侧：主机分组与主机列表静态原型
-- 中间：终端视觉占位，不包含终端运行时或命令执行
-- 右侧：AI 助手视觉占位，不调用模型
+- 顶部：当前连接、主题、语言和面板显隐控制
+- 左侧：ActivityBar、主机列表及本地文件/SFTP 演示树
+- 中间：跟随主题和终端偏好的终端视觉占位，不执行命令
+- 右侧：AI 助手静态会话、安全 Markdown 和输入区，不调用模型
 - 主机选择：使用 Zustand 驱动终端标题和在线/离线演示状态
+- 布局：左右面板支持显隐和有边界的拖拽调整宽度
+- 设置：支持主题、语言、终端字体和字号，本地仅保存非敏感偏好
 
-当前不包含主机 CRUD、SSH 连接、凭据管理、Agent 调用或前后端联调。
+当前不包含主机 CRUD、真实文件访问、SSH 连接、凭据管理、Agent 调用或
+前后端联调；文件树、终端输出、会话和模型消息均为教程演示数据。
 
 ## 安装依赖
 

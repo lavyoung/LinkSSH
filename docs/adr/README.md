@@ -35,6 +35,7 @@ ADR 编号一经使用不得重复。决策变化时新增 ADR，不重写历史
 | 编号 | 决策 | 状态 |
 |---|---|---|
 | [0001](0001-modular-monolith-ddd-java21.md) | 采用模块化单体、DDD 与 Java 21 | Accepted |
+| [0002](0002-desktop-internationalization.md) | 桌面端采用资源键驱动的中英文国际化 | Accepted |
 
 ## 模板
 
