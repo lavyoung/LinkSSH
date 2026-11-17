@@ -22,13 +22,21 @@
 
 ## 公开 API
 
-当前 P0 阶段暂未定义公开 API。
-
-后续公开契约放置在：
+当前公开契约放置在：
 
 ```text
 com.lavyoung.ai.linkssh.execution
 ```
+
+已定义：
+
+- `SshSessionId`：一次独立 SSH 会话的稳定标识
+- `SshSessionStatus`：连接、断开和失败等会话生命周期状态
+- `SshConnectionResult`：互斥表达连接成功或失败的密封结果
+- `SshConnectionFailure`：隔离底层客户端异常的稳定失败分类
+
+SSH 客户端出站端口 `SshSessionPort` 位于内部应用层，只负责连接、断开和
+状态查询，不属于其他模块可以直接调用的公开 API。
 
 具体实现放置在：
 
