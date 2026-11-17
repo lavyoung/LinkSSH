@@ -46,10 +46,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <!-- Framework BOM versions -->
+        <!-- Framework and library versions -->
         <spring-ai.version>2.0.2</spring-ai.version>
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <archunit.version>1.4.2</archunit.version>
+        <apache-sshd.version>2.20.0</apache-sshd.version>
 
         <!-- Build plugin versions -->
         <flatten-maven-plugin.version>1.8.0</flatten-maven-plugin.version>
@@ -65,6 +66,7 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
             <dependency>
                 <groupId>org.springframework.modulith</groupId>
                 <artifactId>spring-modulith-bom</artifactId>
@@ -72,42 +74,57 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <!-- SSH infrastructure -->
+            <dependency>
+                <groupId>org.apache.sshd</groupId>
+                <artifactId>sshd-core</artifactId>
+                <version>${apache-sshd.version}</version>
+            </dependency>
+
             <!-- LinkSSH internal modules -->
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>linkssh-shared-kernel</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>linkssh-host</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>linkssh-governance</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>linkssh-execution</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>linkssh-agent</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>linkssh-audit</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>linkssh-interfaces</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>linkssh-bootstrap</artifactId>
@@ -178,7 +195,6 @@
                     <updatePomFile>true</updatePomFile>
                     <flattenMode>resolveCiFriendliesOnly</flattenMode>
                 </configuration>
-
                 <executions>
                     <execution>
                         <id>flatten</id>
@@ -198,7 +214,6 @@
                 </executions>
             </plugin>
         </plugins>
-
     </build>
 
 </project>
