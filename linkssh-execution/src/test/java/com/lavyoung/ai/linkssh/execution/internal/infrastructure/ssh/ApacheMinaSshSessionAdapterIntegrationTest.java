@@ -17,18 +17,28 @@ import org.apache.sshd.common.keyprovider.KeyPairProvider;
 import org.apache.sshd.common.session.Session;
 import org.apache.sshd.common.session.SessionListener;
 import org.apache.sshd.server.SshServer;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -51,9 +61,22 @@ class ApacheMinaSshSessionAdapterIntegrationTest {
     private static final String TEST_PASSWORD = "linkssh-test-password";
     private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
 
+    private static ScheduledExecutorService serverExecutor;
+
     private SshServer server;
     private KeyPair serverHostKey;
     private ApacheMinaSshSessionAdapter adapter;
+
+    @BeforeAll
+    static void createServerExecutor() {
+        serverExecutor = Executors.newScheduledThreadPool(2);
+    }
+
+    @AfterAll
+    static void stopServerExecutor() throws InterruptedException {
+        serverExecutor.shutdown();
+        assertTrue(serverExecutor.awaitTermination(2, TimeUnit.SECONDS));
+    }
 
     @BeforeEach
     void startServer() throws Exception {
@@ -61,6 +84,7 @@ class ApacheMinaSshSessionAdapterIntegrationTest {
         server = SshServer.setUpDefaultServer();
         server.setHost("127.0.0.1");
         server.setPort(0);
+        server.setScheduledExecutorService(serverExecutor, false);
         server.setKeyPairProvider(KeyPairProvider.wrap(serverHostKey));
         server.setPasswordAuthenticator(
                 (username, password, session) -> TEST_USERNAME.equals(username)
@@ -75,7 +99,7 @@ class ApacheMinaSshSessionAdapterIntegrationTest {
             adapter.close();
         }
         if (server != null && server.isStarted()) {
-            server.stop(true);
+            server.stop(false);
         }
     }
 
@@ -313,6 +337,82 @@ class ApacheMinaSshSessionAdapterIntegrationTest {
         assertEquals(Optional.empty(), adapter.findStatus(sessionId));
     }
 
+    @Test
+    void shouldRetryWithCurrentSlotWhenPreviousSlotIsRemovedWhileReconnectWaits()
+            throws Exception {
+        CredentialReference credentialReference = credentialReference();
+        AtomicBoolean credentialAvailable = new AtomicBoolean(false);
+        SshCredentialResolverPort resolver = reference -> {
+            if (!credentialReference.equals(reference)
+                    || !credentialAvailable.get()) {
+                return Optional.empty();
+            }
+            return Optional.of(
+                    new PasswordCredentialMaterial(
+                            TEST_PASSWORD.toCharArray()
+                    )
+            );
+        };
+        adapter = startedAdapter(resolver);
+        SshSessionId sessionId = SshSessionId.newId();
+        SshConnectionTarget target = target(
+                credentialReference,
+                fingerprintOf(serverHostKey)
+        );
+
+        assertInstanceOf(
+                SshConnectionResult.Failed.class,
+                adapter.connect(
+                        sessionId,
+                        target,
+                        TEST_TIMEOUT,
+                        TEST_TIMEOUT
+                )
+        );
+
+        ConcurrentMap<SshSessionId, Object> sessionSlots =
+                sessionSlots(adapter);
+        Object previousSlot = sessionSlots.get(sessionId);
+        assertTrue(previousSlot != null);
+        credentialAvailable.set(true);
+
+        AtomicReference<Thread> reconnectThread = new AtomicReference<>();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<SshConnectionResult> reconnectResult;
+            synchronized (previousSlot) {
+                reconnectResult = executor.submit(() -> {
+                    reconnectThread.set(Thread.currentThread());
+                    return adapter.connect(
+                            sessionId,
+                            target,
+                            TEST_TIMEOUT,
+                            TEST_TIMEOUT
+                    );
+                });
+
+                assertTrue(awaitThreadState(
+                        reconnectThread,
+                        Thread.State.BLOCKED,
+                        Duration.ofSeconds(2)
+                ));
+                assertTrue(sessionSlots.remove(sessionId, previousSlot));
+            }
+
+            assertInstanceOf(
+                    SshConnectionResult.Connected.class,
+                    reconnectResult.get(5, TimeUnit.SECONDS)
+            );
+            assertEquals(
+                    Optional.of(SshSessionStatus.CONNECTED),
+                    adapter.findStatus(sessionId)
+            );
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
+        }
+    }
+
     private ApacheMinaSshSessionAdapter startedAdapter(
             SshCredentialResolverPort resolver
     ) {
@@ -358,6 +458,34 @@ class ApacheMinaSshSessionAdapterIntegrationTest {
                         keyPair.getPublic()
                 )
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ConcurrentMap<SshSessionId, Object> sessionSlots(
+            ApacheMinaSshSessionAdapter sessionAdapter
+    ) throws ReflectiveOperationException {
+        Field sessionsField = ApacheMinaSshSessionAdapter.class
+                .getDeclaredField("sessions");
+        sessionsField.setAccessible(true);
+        return (ConcurrentMap<SshSessionId, Object>) sessionsField.get(
+                sessionAdapter
+        );
+    }
+
+    private static boolean awaitThreadState(
+            AtomicReference<Thread> threadReference,
+            Thread.State expectedState,
+            Duration timeout
+    ) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            Thread thread = threadReference.get();
+            if (thread != null && thread.getState() == expectedState) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return false;
     }
 
     private static KeyPair generateRsaKeyPair()

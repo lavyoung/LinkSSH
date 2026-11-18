@@ -28,6 +28,9 @@ import java.util.concurrent.ConcurrentMap;
  * 并发同步边界。连接不同会话标识时可以并行；连接、重连和断开同一会话
  * 标识时会串行执行，避免底层会话泄漏。</p>
  *
+ * <p>线程锁定会话槽后还会重新检查槽是否仍注册在当前会话标识下，
+ * 防止断开线程移除旧槽后，等待中的重连线程把新连接写入失效槽。</p>
+ *
  * <p>凭据只在身份认证期间解析并安装，认证完成后立即从客户端会话移除。
  * 底层异常会被转换为稳定的 LinkSSH 失败分类，不向外暴露 Apache MINA
  * 类型或可能包含敏感信息的异常消息。</p>
@@ -102,45 +105,76 @@ final class ApacheMinaSshSessionAdapter implements SshSessionPort, AutoCloseable
         requirePositive(connectTimeout, "SSH connect timeout");
         requirePositive(authenticationTimeout, "SSH authentication timeout");
 
-        SessionSlot slot = sessions.computeIfAbsent(sessionId, ignored -> new SessionSlot());
-        synchronized (slot) {
-            slot.status = SshSessionStatus.CONNECTING;
-            this.closeSession(slot.session, connectTimeout);
-            slot.session = null;
-
-            if (closed || !client.isStarted()) {
-                return failed(slot, sessionId, SshConnectionFailure.CLIENT_UNAVAILABLE, null, connectTimeout);
-            }
-
-            ClientSession candidateSession;
-            try {
-                candidateSession = this.openSession(target, connectTimeout);
-            } catch (IOException | RuntimeException exception) {
-                return failed(slot, sessionId,
-                    SshConnectionFailureClassifier.classifyConnection(exception), null, connectTimeout);
-            }
-
-            Optional<SshCredentialMaterial> resolvedCredential;
-            try {
-                resolvedCredential = credentialResolver.resolve(target.credentialReference());
-            } catch (RuntimeException exception) {
-                return failed(slot, sessionId, SshConnectionFailure.UNEXPECTED_FAILURE, candidateSession, connectTimeout);
-            }
-
-            if (resolvedCredential == null || resolvedCredential.isEmpty()) {
-                return failed(slot, sessionId, SshConnectionFailure.CREDENTIAL_UNAVAILABLE, candidateSession, connectTimeout);
-            }
-
-            try (SshCredentialMaterial credential = resolvedCredential.orElseThrow()) {
-                this.authenticateSession(candidateSession, credential, authenticationTimeout);
-            } catch (IOException | GeneralSecurityException | RuntimeException exception) {
-                return failed(slot, sessionId, SshConnectionFailureClassifier.classifyAuthentication(exception), candidateSession, connectTimeout);
-            }
-
-            slot.session = candidateSession;
-            slot.status = SshSessionStatus.CONNECTED;
-            return new SshConnectionResult.Connected(sessionId);
+        if (closed) {
+            return new SshConnectionResult.Failed(sessionId, SshConnectionFailure.CLIENT_UNAVAILABLE);
         }
+
+        while (true) {
+            SessionSlot slot = sessions.computeIfAbsent(sessionId, ignored -> new SessionSlot());
+            synchronized (slot) {
+                if (sessions.get(sessionId) != slot) {
+                    continue;
+                }
+                return connectWithinSlot(slot, sessionId, target, connectTimeout, authenticationTimeout);
+            }
+        }
+    }
+
+    private SshConnectionResult connectWithinSlot(SessionSlot slot, SshSessionId sessionId, SshConnectionTarget target,
+                                                  Duration connectTimeout, Duration authenticationTimeout) {
+        slot.status = SshSessionStatus.CONNECTING;
+        this.closeSession(slot.session, connectTimeout);
+        slot.session = null;
+
+        if (closed || !client.isStarted()) {
+            SshConnectionResult result =
+                failed(slot, sessionId, SshConnectionFailure.CLIENT_UNAVAILABLE, null, connectTimeout);
+            removeSlotWhenClosed(sessionId, slot);
+            return result;
+        }
+
+        ClientSession candidateSession;
+        try {
+            candidateSession = this.openSession(target, connectTimeout);
+        } catch (IOException | RuntimeException exception) {
+            return failed(slot, sessionId,
+                SshConnectionFailureClassifier.classifyConnection(exception), null, connectTimeout);
+        }
+
+        Optional<SshCredentialMaterial> resolvedCredential;
+        try {
+            resolvedCredential = credentialResolver.resolve(target.credentialReference());
+        } catch (RuntimeException exception) {
+            return failed(slot, sessionId, SshConnectionFailure.UNEXPECTED_FAILURE, candidateSession, connectTimeout);
+        }
+
+        if (resolvedCredential == null || resolvedCredential.isEmpty()) {
+            return failed(slot, sessionId, SshConnectionFailure.CREDENTIAL_UNAVAILABLE, candidateSession, connectTimeout);
+        }
+
+        try (SshCredentialMaterial credential = resolvedCredential.orElseThrow()) {
+            this.authenticateSession(candidateSession, credential, authenticationTimeout);
+        } catch (IOException | GeneralSecurityException | RuntimeException exception) {
+            return failed(slot, sessionId, SshConnectionFailureClassifier.classifyAuthentication(exception), candidateSession, connectTimeout);
+        }
+
+        /*
+         * start()、close() 和连接结果发布共同使用当前适配器作为生命周期锁。
+         *
+         * 如果连接先发布，之后执行的 close() 一定能在会话注册表中看到它；
+         * 如果 close() 先把 closed 设为 true，则本次连接不得再发布为成功。
+         */
+        synchronized (this) {
+            if (!closed && client.isStarted()) {
+                slot.session = candidateSession;
+                slot.status = SshSessionStatus.CONNECTED;
+                return new SshConnectionResult.Connected(sessionId);
+            }
+        }
+        SshConnectionResult result =
+            failed(slot, sessionId, SshConnectionFailure.CLIENT_UNAVAILABLE, candidateSession, connectTimeout);
+        removeSlotWhenClosed(sessionId, slot);
+        return result;
     }
 
     /**
@@ -153,29 +187,49 @@ final class ApacheMinaSshSessionAdapter implements SshSessionPort, AutoCloseable
     public void disconnect(SshSessionId sessionId, Duration closeTimeout) {
         Objects.requireNonNull(sessionId, "SSH session id must not be null");
         requirePositive(closeTimeout, "SSH close timeout");
-        SessionSlot slot = sessions.get(sessionId);
-        if (slot == null) {
-            return;
-        }
 
-        synchronized (slot) {
-            slot.status = SshSessionStatus.DISCONNECTING;
-            closeSession(slot.session, closeTimeout);
-            slot.session = null;
-            slot.status = SshSessionStatus.DISCONNECTED;
-            sessions.remove(sessionId, slot);
+        while (true) {
+            SessionSlot slot = sessions.get(sessionId);
+            if (slot == null) {
+                return;
+            }
+
+            synchronized (slot) {
+                if (sessions.get(sessionId) != slot) {
+                    continue;
+                }
+                slot.status = SshSessionStatus.DISCONNECTING;
+                closeSession(slot.session, closeTimeout);
+                slot.session = null;
+                slot.status = SshSessionStatus.DISCONNECTED;
+                sessions.remove(sessionId, slot);
+                return;
+            }
         }
     }
 
+    /**
+     * 查询指定会话的当前状态。
+     *
+     * @param sessionId 需要查询的会话标识
+     * @return 已注册会话的状态；不存在时返回空
+     */
     @Override
     public Optional<SshSessionStatus> findStatus(SshSessionId sessionId) {
         Objects.requireNonNull(sessionId, "SSH session id must not be null");
-        SessionSlot slot = sessions.get(sessionId);
-        if (slot == null) {
-            return Optional.empty();
+        while (true) {
+            SessionSlot slot = sessions.get(sessionId);
+            if (slot == null) {
+                return Optional.empty();
+            }
+            synchronized (slot) {
+                if (sessions.get(sessionId) != slot) {
+                    continue;
+                }
+                markDisconnectedWhenClosed(slot);
+                return Optional.of(slot.status);
+            }
         }
-        markDisconnectedWhenClosed(slot);
-        return Optional.of(slot.status);
     }
 
     /**
@@ -184,16 +238,20 @@ final class ApacheMinaSshSessionAdapter implements SshSessionPort, AutoCloseable
      * <p>该操作具备幂等性。关闭后不允许重新启动适配器。</p>
      */
     @Override
-    public synchronized void close() {
-        if (closed) {
-            return;
+    public void close() {
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            closed = true;
         }
-        closed = true;
         for (SshSessionId sessionId : List.copyOf(sessions.keySet())) {
             disconnect(sessionId, SHUTDOWN_TIMEOUT);
         }
-        if (client.isStarted()) {
-            client.stop();
+        synchronized (this) {
+            if (client.isStarted()) {
+                client.stop();
+            }
         }
     }
 
@@ -215,17 +273,20 @@ final class ApacheMinaSshSessionAdapter implements SshSessionPort, AutoCloseable
         }
     }
 
-    private void markDisconnectedWhenClosed(SessionSlot slot) {
+    /**
+     * 在持有会话槽锁的前提下刷新底层连接状态。
+     */
+    private static void markDisconnectedWhenClosed(SessionSlot slot) {
         ClientSession session = slot.session;
-        if (slot.status != SshSessionStatus.CONNECTED || session == null || session.isOpen()) {
+        if (slot.status != SshSessionStatus.CONNECTED) {
             return;
         }
-        synchronized (slot) {
-            if (slot.status == SshSessionStatus.CONNECTED && slot.session != null && !slot.session.isOpen()) {
-                slot.session = null;
-                slot.status = SshSessionStatus.DISCONNECTED;
-            }
+        if (session != null && session.isOpen()) {
+            return;
         }
+
+        slot.session = null;
+        slot.status = SshSessionStatus.DISCONNECTED;
     }
 
     private void closeSession(ClientSession session, Duration timeout) {
@@ -262,6 +323,12 @@ final class ApacheMinaSshSessionAdapter implements SshSessionPort, AutoCloseable
         slot.status = SshSessionStatus.FAILED;
         closeSession(session, closeTimeout);
         return new SshConnectionResult.Failed(sessionId, failure);
+    }
+
+    private void removeSlotWhenClosed(SshSessionId sessionId, SessionSlot slot) {
+        if (closed) {
+            sessions.remove(sessionId, slot);
+        }
     }
 
     private static final class SessionSlot {
