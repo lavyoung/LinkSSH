@@ -6,6 +6,21 @@ TypeScript、Vite、Tailwind CSS 4、Zustand 和 i18next 构建。
 桌面端与 Java 后端位于同一个 Git 仓库，但使用独立的 npm、Cargo 和 Tauri
 构建体系，不加入根 Maven Reactor。
 
+## 目标部署模式
+
+桌面客户端必须支持两种显式运行方式：
+
+- 本地模式：Tauri 启动并监督安装包内置的 Java 后端，通过环回随机端口连接，
+  非敏感数据由 Java 后端保存到本机 SQLite。
+- 远程模式：客户端连接用户配置的 LinkSSH Server，不启动本地 Java 后端。
+
+两种模式复用统一的 API Client、REST、SSE 和 WebSocket 契约，业务组件不得写死
+`localhost:8080` 或远程域名。完整安装包始终包含本地运行能力；远程连接失败时
+不得静默切换到本地模式，本地与远程数据首期也不自动同步。
+
+当前工程尚未实现本地后端生命周期、API Endpoint 选择或 SQLite 联调，这些能力
+必须按 ADR-0005 和 `PROJECT_PLAN.md` 的 P0.4、P1.2 逐步落地。
+
 ## 环境要求
 
 - Node.js 20 或更高版本
@@ -94,3 +109,6 @@ npm run tauri dev
 - 前端不得直接获得不受控的 Shell、文件系统或凭据访问能力。
 - 远程执行、风险判断和凭据管理必须通过 LinkSSH 后端公开 API 完成。
 - 密码、私钥、Token 和凭据正文不得进入前端状态、日志或本地存储。
+- React 与 Tauri 不得直接访问 SQLite；本地数据库由 Java 后端独占管理。
+- 本地后端只能监听环回随机端口，并使用不落盘的短生命周期会话认证。
+- 本地后端进程必须由 Tauri 原生端启动、监测并在应用退出时优雅关闭。
