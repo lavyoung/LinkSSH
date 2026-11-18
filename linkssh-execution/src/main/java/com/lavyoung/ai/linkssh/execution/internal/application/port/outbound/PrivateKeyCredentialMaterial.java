@@ -21,13 +21,12 @@ public final class PrivateKeyCredentialMaterial implements SshCredentialMaterial
      * 创建不带口令的私钥凭据材料。
      *
      * @param privateKey 私钥文件内容
-     * @throws NullPointerException     当私钥数组为 {@code null} 时抛出
+     * @throws NullPointerException 当私钥数组为 {@code null} 时抛出
      * @throws IllegalArgumentException 当私钥数组为空时抛出
      */
     public PrivateKeyCredentialMaterial(byte[] privateKey) {
         this(privateKey, new char[0]);
     }
-
 
     /**
      * 创建带有可选口令的私钥凭据材料。
@@ -36,15 +35,17 @@ public final class PrivateKeyCredentialMaterial implements SshCredentialMaterial
      *
      * @param privateKey 私钥文件内容
      * @param passphrase 私钥口令；没有口令时传入空数组
-     * @throws NullPointerException     当任一数组为 {@code null} 时抛出
+     * @throws NullPointerException 当任一数组为 {@code null} 时抛出
      * @throws IllegalArgumentException 当私钥数组为空时抛出
      */
     public PrivateKeyCredentialMaterial(byte[] privateKey, char[] passphrase) {
         Objects.requireNonNull(privateKey, "SSH private key must not be null");
         Objects.requireNonNull(passphrase, "SSH private key passphrase must not be null");
+
         if (privateKey.length == 0) {
             throw new IllegalArgumentException("SSH private key must not be empty");
         }
+
         this.privateKey = privateKey.clone();
         this.passphrase = passphrase.clone();
     }
@@ -64,12 +65,9 @@ public final class PrivateKeyCredentialMaterial implements SshCredentialMaterial
     }
 
     /**
-     * 返回私钥内容的临时副本。
+     * 判断私钥是否配置了口令。
      *
-     * <p>调用方使用完成后必须通过 {@link Arrays#fill(byte[], byte)}
-     * 清除返回的副本。</p>
-     *
-     * @return 私钥字节数组副本
+     * @return 存在口令时返回 {@code true}
      * @throws IllegalStateException 当凭据材料已经关闭时抛出
      */
     public synchronized boolean hasPassphrase() {
@@ -90,8 +88,11 @@ public final class PrivateKeyCredentialMaterial implements SshCredentialMaterial
         return passphrase.clone();
     }
 
+    /**
+     * 清除当前对象保存的私钥和口令。
+     */
     @Override
-    public void close() {
+    public synchronized void close() {
         if (privateKey != null) {
             Arrays.fill(privateKey, (byte) 0);
             privateKey = null;

@@ -38,6 +38,11 @@ com.lavyoung.ai.linkssh.execution
 SSH 客户端出站端口 `SshSessionPort` 位于内部应用层，只负责连接、断开和
 状态查询，不属于其他模块可以直接调用的公开 API。
 
+凭据解析同样位于内部应用层：`SshCredentialResolverPort` 只接受 Host 上下文
+提供的 `CredentialReference`，并返回短生命周期的 `SshCredentialMaterial`。
+密码、私钥和口令使用可清除数组承载，调用方必须通过 try-with-resources 在
+认证结束后立即清理；凭据正文不得进入公开 API、日志、异常或会话缓存。
+
 具体实现放置在：
 
 ```text

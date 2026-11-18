@@ -45,11 +45,15 @@ public final class PasswordCredentialMaterial implements SshCredentialMaterial {
         return password.clone();
     }
 
+    /**
+     * 清除当前对象保存的密码。
+     */
     @Override
-    public void close() {
+    public synchronized void close() {
         if (password == null) {
             return;
         }
+
         Arrays.fill(password, '\0');
         password = null;
     }
@@ -66,7 +70,7 @@ public final class PasswordCredentialMaterial implements SshCredentialMaterial {
 
     private void ensureOpen() {
         if (password == null) {
-            throw new IllegalStateException("SSH password credential material has been closed");
+            throw new IllegalStateException("SSH password credential material has already been closed");
         }
     }
 }

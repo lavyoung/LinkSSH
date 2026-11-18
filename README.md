@@ -4,6 +4,9 @@ LinkSSH 是一个面向开发者和运维人员的 AI SSH 智能终端项目。�
 Spring Boot、DDD 和模块化单体架构，在保持本地开发与部署简单的同时，通过自动化
 架构测试保护模块边界。
 
+本仓库专注于 SSH、远程执行、运维 Agent、风险治理和操作审计。Workspace、代码
+理解与 Coding Agent 将由未来独立的 LinkCode 仓库承载，不作为 LinkSSH 模块加入。
+
 当前已经完成 P0 工程骨架，尚未实现具体 SSH、AI 或数据库业务。
 
 ## 后端模块
