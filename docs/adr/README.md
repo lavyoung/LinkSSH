@@ -37,6 +37,7 @@ ADR 编号一经使用不得重复。决策变化时新增 ADR，不重写历史
 | [0001](0001-modular-monolith-ddd-java21.md) | 采用模块化单体、DDD 与 Java 21 | Accepted |
 | [0002](0002-desktop-internationalization.md) | 桌面端采用资源键驱动的中英文国际化 | Accepted |
 | [0003](0003-apache-mina-sshd-client.md) | 采用 Apache MINA SSHD 实现安全 SSH 连接 | Accepted |
+| [0004](0004-separate-linkcode-repository.md) | 将代码智能体作为独立 LinkCode 仓库建设 | Accepted |
 
 ## 模板
 
