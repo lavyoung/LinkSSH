@@ -65,3 +65,16 @@ linkssh-execution
 ## 安全约束
 
 任何由 AI 模型产生的命令都必须先经过治理模块，不允许 Agent 绕过治理流程直接操作 SSH Client。
+
+## 验证
+
+自动化验证使用进程内 Apache MINA SSH Server，不依赖开发者个人服务器：
+
+```powershell
+mvn -pl linkssh-execution -am test
+```
+
+如需使用受控真实服务器做可选验证，必须先阅读
+[真实 SSH 服务器冒烟测试指南](../docs/development/ssh-real-server-smoke-test.md)。
+不得为完成冒烟测试而关闭主机密钥校验，也不得把服务器地址、账号、密码或
+私钥提交到仓库。
