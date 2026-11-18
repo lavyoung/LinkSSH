@@ -91,6 +91,28 @@ final class ApacheMinaSshSessionAdapter implements SshSessionPort, AutoCloseable
 
     /**
      * 建立网络连接并完成 SSH 身份认证。
+     * <pre>{@code
+     * connect()
+     * │
+     * ├─ 取得当前 SessionSlot
+     * ├─ 锁定同一会话标识
+     * ├─ 关闭旧连接
+     * ├─ 状态设为 CONNECTING
+     * │
+     * ├─ openSession()
+     * │  └─ 传入预期主机指纹
+     * │
+     * ├─ credentialResolver.resolve()
+     * │  └─ 根据 CredentialReference 取得凭据
+     * │
+     * ├─ authenticateSession()
+     * │  ├─ 临时安装密码或私钥
+     * │  ├─ 执行 session.auth()
+     * │  └─ 立即移除认证身份
+     * │
+     * ├─ 发布 CONNECTED 状态
+     * └─ 返回 Connected
+     * }</pre>
      *
      * @param sessionId             本次连接使用的会话标识
      * @param target                SSH 连接目标及安全校验信息
@@ -234,6 +256,18 @@ final class ApacheMinaSshSessionAdapter implements SshSessionPort, AutoCloseable
 
     /**
      * 关闭全部 SSH 会话并停止底层客户端。
+     * <pre>{@code
+     * closed = true
+     *       │
+     *       ▼
+     * 阻止新连接成功发布
+     *       │
+     *       ▼
+     * 逐个断开已注册会话
+     *       │
+     *       ▼
+     * 停止 SshClient
+     * }</pre>
      *
      * <p>该操作具备幂等性。关闭后不允许重新启动适配器。</p>
      */
